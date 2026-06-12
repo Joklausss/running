@@ -1,0 +1,19 @@
+{
+  "name": "running-app",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Personalized running app: AI training plans, geolocated routes, GPS tracking & stats.",
+  "workspaces": [
+    "frontend",
+    "backend"
+  ],
+  "scripts": {
+    "dev:frontend": "npm run dev --workspace frontend",
+    "dev:backend": "npm run dev --workspace backend",
+    "build": "npm run build --workspace backend && npm run build --workspace frontend",
+    "migrate": "npm run migrate --workspace backend"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

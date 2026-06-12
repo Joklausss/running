@@ -1,0 +1,60 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: dark;
+  }
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+  body {
+    @apply bg-bg text-text font-sans antialiased;
+    margin: 0;
+  }
+  h1,
+  h2,
+  h3 {
+    @apply font-sans font-extrabold tracking-tight;
+  }
+}
+
+@layer components {
+  .metric {
+    @apply font-mono tabular-nums;
+  }
+  .card {
+    @apply bg-surface rounded-2xl border border-white/5;
+  }
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl px-5 py-3
+           font-semibold transition-all active:scale-[0.98] disabled:opacity-40
+           disabled:pointer-events-none select-none;
+  }
+  .btn-primary {
+    @apply btn bg-primary text-black hover:bg-primary-dark;
+  }
+  .btn-ghost {
+    @apply btn bg-surface-2 text-text hover:bg-white/10;
+  }
+  .option-card {
+    @apply card cursor-pointer p-4 text-left transition-all
+           hover:border-primary/40 hover:-translate-y-0.5;
+  }
+  .option-card[data-selected='true'] {
+    @apply border-primary/70 shadow-glow;
+  }
+}
+
+/* Subtle scrollbar for the dark theme */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: #2a2f3d;
+  border-radius: 999px;
+}
