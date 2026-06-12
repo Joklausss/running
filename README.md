@@ -32,6 +32,31 @@ npm run dev:backend         # http://localhost:4000
 The frontend proxies `/api` to the backend and falls back to localStorage when
 the backend isn't running, so onboarding is demoable without a database.
 
+## Run with Docker (full stack)
+
+Needs only Docker. Brings up PostgreSQL, the API (migrations run automatically),
+and the frontend behind nginx (which proxies `/api` to the backend):
+
+```bash
+docker compose up --build
+# → app on http://localhost:8080
+```
+
+Override secrets/ports via env (or a `.env` file next to `docker-compose.yml`):
+
+```bash
+POSTGRES_PASSWORD=… JWT_SECRET=… WEB_PORT=8080 docker compose up --build -d
+```
+
+Data persists in the `pgdata` volume. Tear down with `docker compose down`
+(add `-v` to also drop the database).
+
+## CI
+
+GitHub Actions (`.github/workflows/ci.yml`) runs on every push/PR: `lint` +
+`build` + `test`, plus a Postgres job that applies the migrations.
+Locally: `npm run lint`, `npm test`.
+
 ## Roadmap (vertical slices)
 - [x] Monorepo scaffold, DB schema, auth + profile API
 - [x] Onboarding wizard (4 steps)
