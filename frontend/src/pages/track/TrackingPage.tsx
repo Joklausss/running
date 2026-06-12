@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { api, isAuthed } from '../../services/api';
+import { isAuthed } from '../../services/api';
+import { saveActivityResilient } from '../../services/offlineQueue';
 import { useTracker, clearRunBuffer } from './useTracker';
 import { useHeartRate } from './useHeartRate';
 import TrackMap from './TrackMap';
@@ -250,27 +251,29 @@ function SummaryScreen({
   async function save() {
     setSaving(true);
     setError(null);
-    try {
-      await api.saveActivity({
-        plannedSessionId: sessionId,
-        startedAt: new Date(snap.startedAt ?? Date.now()).toISOString(),
-        endedAt: new Date().toISOString(),
-        distanceKm: Number(snap.distanceKm.toFixed(3)),
-        durationSec: snap.elapsedSec,
-        avgPaceSecPerKm: avg != null ? Math.round(avg) : null,
-        avgHr,
-        maxHr: maxHrVal,
-        gpsTrack: snap.points,
-        rpe,
-        mood: mood != null ? MOODS[mood] : null,
-        notes: notes.trim() || null,
-      });
-      clearRunBuffer();
-      onDone();
-    } catch {
-      setError('Enregistrement impossible (backend démarré ?).');
-      setSaving(false);
+    // Always succeeds locally: saved online, or queued offline for later sync.
+    const { synced } = await saveActivityResilient({
+      plannedSessionId: sessionId,
+      startedAt: new Date(snap.startedAt ?? Date.now()).toISOString(),
+      endedAt: new Date().toISOString(),
+      distanceKm: Number(snap.distanceKm.toFixed(3)),
+      durationSec: snap.elapsedSec,
+      avgPaceSecPerKm: avg != null ? Math.round(avg) : null,
+      avgHr,
+      maxHr: maxHrVal,
+      gpsTrack: snap.points,
+      rpe,
+      mood: mood != null ? MOODS[mood] : null,
+      notes: notes.trim() || null,
+    });
+    clearRunBuffer();
+    if (!synced) {
+      // brief confirmation that it's safely stored offline
+      setError('📴 Hors-ligne — course enregistrée, elle se synchronisera automatiquement.');
+      setTimeout(onDone, 1800);
+      return;
     }
+    onDone();
   }
 
   return (

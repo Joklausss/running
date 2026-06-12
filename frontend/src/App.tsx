@@ -1,9 +1,10 @@
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, useEffect } from 'react';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import OnboardingWizard from './pages/onboarding/OnboardingWizard';
 import Dashboard from './pages/Dashboard';
 import Auth from './pages/Auth';
 import { loadProfileLocal } from './services/api';
+import { registerActivitySync } from './services/offlineQueue';
 
 // Heavy routes (Leaflet / Recharts) are split into their own chunks so they
 // don't bloat the initial load.
@@ -23,6 +24,10 @@ function Loading() {
 
 export default function App() {
   const hasProfile = !!loadProfileLocal();
+
+  // flush any runs saved while offline once connectivity returns
+  useEffect(() => registerActivitySync(), []);
+
   return (
     <BrowserRouter>
       <Suspense fallback={<Loading />}>

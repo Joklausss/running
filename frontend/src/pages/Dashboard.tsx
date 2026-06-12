@@ -16,6 +16,7 @@ import {
   weekVsLast,
 } from './stats/statsMath';
 import Heatmap from './stats/Heatmap';
+import { pendingCount } from '../services/offlineQueue';
 
 const DAY_MS = 86_400_000;
 
@@ -93,6 +94,14 @@ export default function Dashboard() {
           <p className="text-muted text-sm">{objective?.title} · {level?.title}</p>
           <h1 className="text-3xl mt-1">{objective?.icon} Tableau de bord</h1>
         </header>
+
+        {pendingCount() > 0 && (
+          <div className="rounded-xl bg-accent/10 border border-accent/30 px-4 py-2 text-sm">
+            📴 {pendingCount()} course{pendingCount() > 1 ? 's' : ''} en attente de
+            synchronisation — elle{pendingCount() > 1 ? 's' : ''} se{pendingCount() > 1 ? 'ront' : 'ra'}{' '}
+            envoyée{pendingCount() > 1 ? 's' : ''} dès le retour en ligne.
+          </div>
+        )}
 
         {/* Next recommended session */}
         {next && (
