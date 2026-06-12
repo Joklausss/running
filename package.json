@@ -14,6 +14,7 @@
     "build": "npm run build --workspace backend && npm run build --workspace frontend",
     "migrate": "npm run migrate --workspace backend",
     "lint": "eslint backend/src frontend/src",
+    "e2e": "playwright test",
     "test": "tsx frontend/src/pages/stats/statsMath.test.ts && tsx frontend/src/pages/plan/workout.test.ts && tsx frontend/src/pages/track/trackingMath.test.ts && tsx backend/src/services/TrainingPlanService.test.ts"
   },
   "engines": {
@@ -21,6 +22,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",
+    "@playwright/test": "^1.60.0",
     "eslint": "^9.39.4",
     "eslint-plugin-react-hooks": "^5.2.0",
     "globals": "^15.15.0",
