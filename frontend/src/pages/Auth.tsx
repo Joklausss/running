@@ -28,7 +28,7 @@ export default function Auth() {
       const profile = loadProfileLocal();
       if (profile) await api.saveProfile(profile).catch(() => {});
       navigate(next, { replace: true });
-    } catch (err) {
+    } catch {
       setError(
         mode === 'register'
           ? 'Inscription impossible (email déjà utilisé ?).'

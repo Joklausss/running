@@ -12,7 +12,9 @@ export function useHeartRate() {
   const [error, setError] = useState<string | null>(null);
 
   // Web Bluetooth isn't in the standard TS DOM lib → access via a cast.
-  const nav = navigator as unknown as { bluetooth?: { requestDevice: Function } };
+  const nav = navigator as unknown as {
+    bluetooth?: { requestDevice: (opts: unknown) => Promise<unknown> };
+  };
   const supported = typeof navigator !== 'undefined' && !!nav.bluetooth;
 
   async function connect() {

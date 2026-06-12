@@ -2,6 +2,7 @@
   "name": "running-app",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "description": "Personalized running app: AI training plans, geolocated routes, GPS tracking & stats.",
   "workspaces": [
     "frontend",
@@ -11,9 +12,18 @@
     "dev:frontend": "npm run dev --workspace frontend",
     "dev:backend": "npm run dev --workspace backend",
     "build": "npm run build --workspace backend && npm run build --workspace frontend",
-    "migrate": "npm run migrate --workspace backend"
+    "migrate": "npm run migrate --workspace backend",
+    "lint": "eslint backend/src frontend/src",
+    "test": "tsx frontend/src/pages/stats/statsMath.test.ts && tsx frontend/src/pages/plan/workout.test.ts && tsx frontend/src/pages/track/trackingMath.test.ts && tsx backend/src/services/TrainingPlanService.test.ts"
   },
   "engines": {
     "node": ">=20"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.4",
+    "eslint": "^9.39.4",
+    "eslint-plugin-react-hooks": "^5.2.0",
+    "globals": "^15.15.0",
+    "typescript-eslint": "^8.61.0"
   }
 }

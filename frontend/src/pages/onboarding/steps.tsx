@@ -131,12 +131,14 @@ export function Step2Level({ profile, patch }: StepProps) {
 export function Step3Constraints({ profile, patch }: StepProps) {
   function toggleDay(day: Weekday) {
     const set = new Set(profile.availableDays);
-    set.has(day) ? set.delete(day) : set.add(day);
+    if (set.has(day)) set.delete(day);
+    else set.add(day);
     patch({ availableDays: WEEKDAYS.filter((w) => set.has(w.id)).map((w) => w.id) });
   }
   function toggleInjury(inj: Injury) {
     const set = new Set(profile.injuries);
-    set.has(inj) ? set.delete(inj) : set.add(inj);
+    if (set.has(inj)) set.delete(inj);
+    else set.add(inj);
     patch({ injuries: INJURIES.filter((i) => set.has(i.id)).map((i) => i.id) });
   }
 

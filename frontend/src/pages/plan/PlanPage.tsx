@@ -30,7 +30,6 @@ export default function PlanPage() {
       return;
     }
     refetch();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [navigate]);
 
   const weekNumbers = useMemo(
