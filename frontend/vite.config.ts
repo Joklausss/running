@@ -66,6 +66,8 @@ export default defineConfig({
   ],
   server: {
     port: 5180,
+    // bind to all interfaces so the app is reachable on the local network (smartphone)
+    host: true,
     proxy: {
       '/api': {
         target: 'http://localhost:4000',

@@ -21,7 +21,7 @@ running-app/
 npm install                 # installs both workspaces
 
 # Frontend (works standalone — profile persists to localStorage)
-npm run dev:frontend        # http://localhost:5173
+npm run dev:frontend        # http://localhost:5180
 
 # Backend (needs PostgreSQL running)
 cp .env.example .env        # then edit DATABASE_URL / secrets
@@ -31,6 +31,37 @@ npm run dev:backend         # http://localhost:4000
 
 The frontend proxies `/api` to the backend and falls back to localStorage when
 the backend isn't running, so onboarding is demoable without a database.
+
+## Access from a smartphone
+
+The Vite dev server binds to all network interfaces (`host: true`), so any
+device on the same Wi-Fi can open the app.
+
+```bash
+# Prints your LAN URL + a QR-code link, then starts the dev server
+npm run dev:lan
+```
+
+Open the printed URL in your phone's browser → tap **"Add to Home Screen"**
+to install it as a PWA.
+
+> **GPS tracking requires HTTPS.**  Mobile browsers block the Geolocation API
+> on plain HTTP (except `localhost`).  To test GPS over LAN, expose the dev
+> server through a TLS tunnel:
+>
+> ```bash
+> # In a second terminal, after npm run dev:lan
+> npx ngrok http 5180
+> ```
+>
+> Ngrok gives you an `https://…ngrok.io` URL you can scan directly from the phone.
+
+For the full stack (including the backend) over LAN, Docker is the simplest path:
+
+```bash
+docker compose up --build
+# → reachable at http://<your-ip>:8080 from any device on the network
+```
 
 ## Run with Docker (full stack)
 
