@@ -1,8 +1,9 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { PlannedSession } from '../../types';
 import { api } from '../../services/api';
 import { DAY_LABELS, DAY_LABELS_LONG, SESSION_META, formatPace } from './sessionMeta';
+import WorkoutExportModal from './WorkoutExportModal';
 
 export default function SessionModal({
   session,
@@ -14,6 +15,7 @@ export default function SessionModal({
   onChanged?: () => void;
 }) {
   const navigate = useNavigate();
+  const [showExport, setShowExport] = useState(false);
   const meta = SESSION_META[session.session_type];
   const paceMin = formatPace(session.target_pace_min);
   const paceMax = formatPace(session.target_pace_max);
@@ -137,7 +139,20 @@ export default function SessionModal({
             ▶︎ Démarrer
           </button>
         </div>
+
+        <button className="btn-ghost w-full mt-3" onClick={() => setShowExport(true)}>
+          ⌚ Exporter vers Apple Watch
+        </button>
       </div>
+
+      {showExport && (
+        <WorkoutExportModal
+          session={session}
+          routeGeojson={session.route_geojson}
+          routeName={session.route_name}
+          onClose={() => setShowExport(false)}
+        />
+      )}
     </div>
   );
 }

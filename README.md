@@ -39,5 +39,6 @@ the backend isn't running, so onboarding is demoable without a database.
 - [x] Route **generation** (Leaflet): builds a graph from the OSM path network and stitches a route ≈ the session's target distance (largest-component start, Dijkstra loops + straight/round fallback + multi-leg combining, never errors on small distances), optional **slope target 1–10** (elevation-scored candidates), elevation profile, GPX export, session association
 - [x] Real-time GPS tracking (Haversine, aberrant-point filter, 30s pace smoothing, km haptics, crash-safe buffer, run summary + RPE/mood/notes)
 - [x] History & statistics (Recharts): history list+filters+replay, stats charts, CTL/ATL/TSB, streak, heatmap, dashboard next-session/week-vs-week
+- [x] Apple Watch export: structured workout (warmup/work/recovery/cooldown + repeats) → open **TCX** file (pace or HR-zone targets) + route GPX, for import via a third-party watch app (all watchOS, incl. older)
 - [ ] PWA / offline Service Worker polish
 ```
