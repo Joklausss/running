@@ -82,6 +82,7 @@ export const api = {
     slopeTarget?: number | null,
     returnToStart = true,
     variant = 0,
+    discipline: 'running' | 'mtb' | 'road' = 'running',
     sessionId?: string | null,
   ) {
     return request<{ route: Route; targetKm: number }>('/routes/generate', {
@@ -93,6 +94,7 @@ export const api = {
         slopeTarget: slopeTarget ?? null,
         returnToStart,
         variant,
+        discipline,
         sessionId: sessionId ?? null,
       }),
     });

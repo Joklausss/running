@@ -79,8 +79,19 @@ export function slopeLabel(score: number): string {
   return 'très pentu';
 }
 
-/** Estimated duration (minutes) for a distance at the runner's easy pace. */
-export function estimatedDurationMin(distanceKm: number, vma: number | null): number {
-  const speed = vma && vma > 0 ? vma * 0.7 : 9.5; // km/h easy pace
+/** Estimated duration (minutes) for a distance, by discipline. */
+export function estimatedDurationMin(
+  distanceKm: number,
+  vma: number | null,
+  discipline: 'running' | 'mtb' | 'road' = 'running',
+): number {
+  const speed =
+    discipline === 'road'
+      ? 24 // km/h road bike
+      : discipline === 'mtb'
+        ? 14 // km/h mountain bike
+        : vma && vma > 0
+          ? vma * 0.7 // running easy pace
+          : 9.5;
   return Math.round((distanceKm / speed) * 60);
 }

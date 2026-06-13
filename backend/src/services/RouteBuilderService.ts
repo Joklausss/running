@@ -87,20 +87,36 @@ interface OverpassEl {
   lon?: number;
 }
 
+export type Discipline = 'running' | 'mtb' | 'road';
+
+// OSM highway types that make sense per discipline:
+//  - running: foot paths + quiet streets
+//  - mtb: off-road tracks/paths/bridleways (+ quiet streets to connect), no steps
+//  - road: paved roads + cycleways (no unpaved paths/tracks/steps)
+const HIGHWAYS_BY_DISCIPLINE: Record<Discipline, string> = {
+  running:
+    'footway|path|track|pedestrian|cycleway|living_street|residential|service|unclassified|tertiary|steps',
+  mtb: 'path|track|bridleway|cycleway|footway|residential|unclassified|service|living_street|tertiary',
+  road: 'cycleway|residential|tertiary|secondary|primary|unclassified|living_street|service',
+};
+
 // In-memory graph cache (24h) so retries / repeated generations skip Overpass.
 const graphCache = new Map<string, { graph: Graph; ts: number }>();
 const GRAPH_TTL_MS = 24 * 60 * 60 * 1000;
 
-async function fetchGraph(lat: number, lng: number, radiusM: number): Promise<Graph> {
-  const key = `${lat.toFixed(2)},${lng.toFixed(2)},${Math.round(radiusM / 500) * 500}`;
+async function fetchGraph(
+  lat: number,
+  lng: number,
+  radiusM: number,
+  discipline: Discipline,
+): Promise<Graph> {
+  const key = `${discipline}|${lat.toFixed(2)},${lng.toFixed(2)},${Math.round(radiusM / 500) * 500}`;
   const cached = graphCache.get(key);
   if (cached && Date.now() - cached.ts < GRAPH_TTL_MS) return cached.graph;
 
-  // Rich runnable network (paths + quiet streets) for good connectivity. The
-  // radius is capped by the caller so this stays fast; longer targets are met
-  // by combining multiple legs rather than a huge fetch.
-  const highways =
-    'footway|path|track|pedestrian|cycleway|living_street|residential|service|unclassified|tertiary|steps';
+  // The radius is capped by the caller so this stays fast; longer targets are
+  // met by combining multiple legs rather than a huge fetch.
+  const highways = HIGHWAYS_BY_DISCIPLINE[discipline];
   const query = `[out:json][timeout:60];
 (
   way["highway"~"^(${highways})$"](around:${radiusM},${lat},${lng});
@@ -592,13 +608,17 @@ export async function generateRoute(
   slopeTarget?: number | null,
   returnToStart = true,
   variant = 0,
+  discipline: Discipline = 'running',
 ): Promise<GeneratedRoute> {
   // A loop only needs to span ~half the target (turnaround); a point-to-point
   // route needs to span ~the whole target (the endpoint is that far away).
+  // Cycling routes are longer, so allow a larger network radius.
+  const loopCap = discipline === 'running' ? 4.5 : 9;
+  const openCap = discipline === 'running' ? 8 : 16;
   const radiusKm = returnToStart
-    ? Math.min(4.5, Math.max(1.5, targetKm * 0.5))
-    : Math.min(8, Math.max(1.5, targetKm * 0.95));
-  const graph = await fetchGraph(lat, lng, Math.round(radiusKm * 1000));
+    ? Math.min(loopCap, Math.max(1.5, targetKm * 0.5))
+    : Math.min(openCap, Math.max(1.5, targetKm * 0.95));
+  const graph = await fetchGraph(lat, lng, Math.round(radiusKm * 1000), discipline);
   const start = chooseStart(graph, lat, lng);
   if (start == null) throw new Error('Aucun chemin trouvé à proximité');
   const { dist, prev } = dijkstra(graph, start);

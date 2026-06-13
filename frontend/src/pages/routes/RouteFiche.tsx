@@ -21,6 +21,7 @@ interface Props {
   associateToSession?: { id: string; label: string } | null;
   /** target distance (km) this route was generated for — shows accuracy */
   targetKm?: number | null;
+  discipline?: 'running' | 'mtb' | 'road';
   onClose: () => void;
   onAssociated?: () => void;
   onRegenerate?: () => void;
@@ -30,6 +31,7 @@ export default function RouteFiche({
   route,
   associateToSession,
   targetKm,
+  discipline = 'running',
   onClose,
   onAssociated,
   onRegenerate,
@@ -117,7 +119,7 @@ export default function RouteFiche({
           <Metric label="Dénivelé +" value={`${gain} m`} />
           <Metric
             label="Durée est."
-            value={`${estimatedDurationMin(route.distance_km, profile?.vma ?? null)} min`}
+            value={`${estimatedDurationMin(route.distance_km, profile?.vma ?? null, discipline)} min`}
           />
         </div>
         <p className="text-xs text-muted text-center mt-1">

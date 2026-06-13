@@ -14,6 +14,13 @@ import RouteFiche from './RouteFiche';
 import RouteWatchExportModal from './RouteWatchExportModal';
 import { slopeLabel, routeShape } from './leafletSetup';
 
+type Discipline = 'running' | 'mtb' | 'road';
+const DISCIPLINES: { id: Discipline; icon: string; label: string; max: number; def: number }[] = [
+  { id: 'running', icon: '🏃', label: 'Course', max: 30, def: 5 },
+  { id: 'mtb', icon: '🚵', label: 'VTT', max: 50, def: 20 },
+  { id: 'road', icon: '🚴', label: 'Vélo route', max: 80, def: 40 },
+];
+
 export default function RoutesPage() {
   const navigate = useNavigate();
   const [params] = useSearchParams();
@@ -29,6 +36,7 @@ export default function RoutesPage() {
   );
   const [geoTried, setGeoTried] = useState(false);
 
+  const [discipline, setDiscipline] = useState<Discipline>('running');
   const [target, setTarget] = useState<number>(tkm ? Math.round(Number(tkm) * 10) / 10 : 5);
   const [slope, setSlope] = useState<number>(0); // 0 = auto (no preference), 1..10
   const [returnToStart, setReturnToStart] = useState(true); // on = loop, off = point-to-point
@@ -88,6 +96,7 @@ export default function RoutesPage() {
         slope > 0 ? slope : null,
         returnToStart,
         v,
+        discipline,
       );
       setGenerated(route);
       setShowFiche(true);
@@ -171,12 +180,39 @@ export default function RoutesPage() {
 
           <main className="mx-auto max-w-xl w-full px-5 py-4 space-y-4">
             <div className="card p-4">
+              {/* Discipline */}
+              <span className="text-sm text-muted">Discipline</span>
+              <div className="grid grid-cols-3 gap-2 mt-2 mb-4">
+                {DISCIPLINES.map((d) => (
+                  <button
+                    key={d.id}
+                    type="button"
+                    onClick={() => {
+                      setDiscipline(d.id);
+                      setTarget(d.def);
+                      setGenerated(null);
+                      setShowFiche(false);
+                      variantRef.current = 0;
+                    }}
+                    className={`rounded-xl py-2 text-sm font-medium transition-all ${
+                      discipline === d.id ? 'bg-primary text-black' : 'bg-surface-2 text-muted'
+                    }`}
+                  >
+                    {d.icon} {d.label}
+                  </button>
+                ))}
+              </div>
+
               <div className="flex justify-between text-sm">
                 <span className="text-muted">Distance cible</span>
                 <span className="metric text-primary text-lg font-bold">{target.toFixed(1)} km</span>
               </div>
               <input
-                type="range" min={0.5} max={30} step={0.5} value={target}
+                type="range"
+                min={0.5}
+                max={DISCIPLINES.find((d) => d.id === discipline)!.max}
+                step={0.5}
+                value={target}
                 onChange={(e) => { setTarget(Number(e.target.value)); variantRef.current = 0; }}
                 className="w-full accent-primary mt-2"
               />
@@ -271,6 +307,7 @@ export default function RoutesPage() {
         <RouteFiche
           route={generated}
           targetKm={target}
+          discipline={discipline}
           associateToSession={associateTo ? { id: associateTo, label: associateLabel } : null}
           onClose={() => setShowFiche(false)}
           onAssociated={() => navigate('/plan')}

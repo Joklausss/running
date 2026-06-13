@@ -104,6 +104,7 @@ routesRouter.post('/generate', async (req: AuthedRequest, res) => {
       slopeTarget: z.number().int().min(1).max(10).nullable().optional(),
       returnToStart: z.boolean().optional(),
       variant: z.number().int().min(0).max(50).optional(),
+      discipline: z.enum(['running', 'mtb', 'road']).optional(),
       sessionId: z.string().uuid().nullable().optional(),
     })
     .safeParse(req.body);
@@ -111,11 +112,20 @@ routesRouter.post('/generate', async (req: AuthedRequest, res) => {
     res.status(400).json({ error: 'lat, lng, targetKm required' });
     return;
   }
-  const { lat, lng, targetKm, slopeTarget, returnToStart, variant, sessionId } = body.data;
+  const { lat, lng, targetKm, slopeTarget, returnToStart, variant, discipline, sessionId } =
+    body.data;
 
   let generated;
   try {
-    generated = await generateRoute(lat, lng, targetKm, slopeTarget, returnToStart ?? true, variant ?? 0);
+    generated = await generateRoute(
+      lat,
+      lng,
+      targetKm,
+      slopeTarget,
+      returnToStart ?? true,
+      variant ?? 0,
+      discipline ?? 'running',
+    );
   } catch (err) {
     res.status(502).json({ error: 'Génération impossible', detail: (err as Error).message });
     return;
@@ -132,15 +142,20 @@ routesRouter.post('/generate', async (req: AuthedRequest, res) => {
   const centerLat = (Math.min(...lats) + Math.max(...lats)) / 2;
   const centerLng = (Math.min(...lngs) + Math.max(...lngs)) / 2;
 
+  const terrain =
+    discipline === 'road' ? 'asphalt' : discipline === 'mtb' ? 'trail' : 'mixed';
+  const label =
+    discipline === 'road' ? 'Vélo route' : discipline === 'mtb' ? 'VTT' : 'Parcours';
+
   const { rows } = await query<{ id: string }>(
     `INSERT INTO routes (name, distance_km, elevation_gain, terrain_type, is_loop,
                          geojson, source, center_lat, center_lng)
      VALUES ($1,$2,$3,$4,$5,$6,'generated',$7,$8) RETURNING id`,
     [
-      `Parcours ${generated.distanceKm.toFixed(1)} km`,
+      `${label} ${generated.distanceKm.toFixed(1)} km`,
       generated.distanceKm,
       elevationGain,
-      'mixed',
+      terrain,
       generated.isLoop,
       JSON.stringify({ type: 'LineString', coordinates: generated.coordinates }),
       centerLat,
