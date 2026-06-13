@@ -5,6 +5,7 @@ import {
   Polyline,
   Marker,
   useMap,
+  useMapEvents,
 } from 'react-leaflet';
 import L from 'leaflet';
 import type { Route } from '../../types';
@@ -27,11 +28,23 @@ function FitBounds({ bounds }: { bounds: L.LatLngBoundsExpression | null }) {
   return null;
 }
 
+/** Clicking the map repositions the start point. */
+function ClickToMove({ onMove }: { onMove: (lat: number, lng: number) => void }) {
+  useMapEvents({
+    click(e) {
+      onMove(e.latlng.lat, e.latlng.lng);
+    },
+  });
+  return null;
+}
+
 interface Props {
   userPos?: [number, number] | null;
   routes: Route[];
   selectedId?: string | null;
   onSelect?: (r: Route) => void;
+  /** when set, the start marker is draggable and the map is click-to-move */
+  onMoveStart?: (lat: number, lng: number) => void;
   className?: string;
 }
 
@@ -40,6 +53,7 @@ export default function RouteMap({
   routes,
   selectedId,
   onSelect,
+  onMoveStart,
   className,
 }: Props) {
   // fit to the selected route, else to all routes, else to the user.
@@ -67,7 +81,24 @@ export default function RouteMap({
       preferCanvas
     >
       <TileLayer url={TILES} attribution={ATTRIB} />
-      {userPos && <Marker position={userPos} icon={userLocationIcon} />}
+      {onMoveStart && <ClickToMove onMove={onMoveStart} />}
+      {userPos && (
+        <Marker
+          position={userPos}
+          icon={userLocationIcon}
+          draggable={!!onMoveStart}
+          eventHandlers={
+            onMoveStart
+              ? {
+                  dragend: (e) => {
+                    const { lat, lng } = (e.target as L.Marker).getLatLng();
+                    onMoveStart(lat, lng);
+                  },
+                }
+              : undefined
+          }
+        />
+      )}
 
       {routes.map((r) => {
         const active = r.id === selectedId;

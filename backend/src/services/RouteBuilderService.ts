@@ -591,6 +591,7 @@ export async function generateRoute(
   targetKm: number,
   slopeTarget?: number | null,
   returnToStart = true,
+  variant = 0,
 ): Promise<GeneratedRoute> {
   // A loop only needs to span ~half the target (turnaround); a point-to-point
   // route needs to span ~the whole target (the endpoint is that far away).
@@ -602,24 +603,33 @@ export async function generateRoute(
   if (start == null) throw new Error('Aucun chemin trouvé à proximité');
   const { dist, prev } = dijkstra(graph, start);
 
-  // candidates: varied directions (different elevation profiles); shape depends
-  // on whether the route must return to the start (loop) or end elsewhere.
+  // `variant` rotates the search directions so successive "regenerate" calls
+  // explore different parts of the network → a genuinely different route.
+  const off = (variant * 47) % 360;
+
   type Built = { nodes: number[]; len: number; isLoop: boolean };
   let built: Built[];
   if (returnToStart) {
     const specs: { shape: Shape; bearing: number | null }[] = [
-      { shape: 'auto', bearing: null },
+      { shape: 'auto', bearing: off },
+      { shape: 'auto', bearing: (off + 72) % 360 },
+      { shape: 'auto', bearing: (off + 144) % 360 },
+      { shape: 'auto', bearing: (off + 216) % 360 },
+      { shape: 'auto', bearing: (off + 288) % 360 },
       { shape: 'loop', bearing: null },
-      { shape: 'line', bearing: null },
-      { shape: 'auto', bearing: 0 },
-      { shape: 'auto', bearing: 120 },
-      { shape: 'auto', bearing: 240 },
+      { shape: 'line', bearing: off },
     ];
     built = specs
       .map((s) => buildRoute(graph, start, dist, prev, targetKm, s.shape, s.bearing))
       .filter((r): r is Built => !!r);
   } else {
-    const bearings: (number | null)[] = [null, 0, 90, 180, 270];
+    const bearings: (number | null)[] = [
+      off,
+      (off + 72) % 360,
+      (off + 144) % 360,
+      (off + 216) % 360,
+      (off + 288) % 360,
+    ];
     built = bearings
       .map((b) => buildOpenRoute(graph, start, dist, prev, targetKm, b))
       .filter((r): r is Built => !!r);
@@ -630,18 +640,26 @@ export async function generateRoute(
     return { coordinates: [[s.lng, s.lat]], distanceKm: 0, isLoop: false, elevationGain: 0 };
   }
 
-  // de-dupe near-identical candidates
-  const uniq: typeof built = [];
-  for (const b of built) {
-    if (!uniq.some((u) => u.isLoop === b.isLoop && Math.abs(u.len - b.len) < 0.2)) uniq.push(b);
-  }
+  // de-dupe by shape + length + midpoint, so different-direction routes of the
+  // same length are kept (otherwise variety collapses).
+  const sig = (b: Built): string => {
+    const mid = graph.get(b.nodes[Math.floor(b.nodes.length / 2)])!;
+    return `${b.isLoop}|${b.len.toFixed(1)}|${mid.lat.toFixed(3)},${mid.lng.toFixed(3)}`;
+  };
+  const seen = new Set<string>();
+  const uniq = built.filter((b) => {
+    const s = sig(b);
+    if (seen.has(s)) return false;
+    seen.add(s);
+    return true;
+  });
 
-  let chosen = uniq[0];
+  let chosen: Built;
   let chosenGain = 0;
   const wantSlope = slopeTarget != null && slopeTarget >= 1;
 
   if (wantSlope) {
-    // score every candidate's elevation in one batched lookup, pick best slope match
+    // score every candidate's elevation in one batched lookup, rank by slope match
     const samples = uniq.map((u) => nodesToCoords(graph, sampleNodes(u.nodes, 12)));
     let gains: number[];
     try {
@@ -655,26 +673,26 @@ export async function generateRoute(
     } catch {
       gains = uniq.map(() => 0);
     }
-    const scored = uniq.map((u, i) => ({
-      u,
-      gain: gains[i],
-      distErr: Math.abs(u.len - targetKm) / targetKm,
-      slopeErr: Math.abs(slopeScore(gains[i], u.len) - slopeTarget!),
-    }));
-    const pool = scored.filter((s) => s.distErr <= 0.18);
-    (pool.length ? pool : scored).sort((a, b) => a.slopeErr - b.slopeErr || a.distErr - b.distErr);
-    const winner = (pool.length ? pool : scored)[0];
+    const scored = uniq
+      .map((u, i) => ({
+        u,
+        gain: gains[i],
+        distErr: Math.abs(u.len - targetKm) / targetKm,
+        slopeErr: Math.abs(slopeScore(gains[i], u.len) - slopeTarget!),
+      }))
+      .sort((a, b) => a.slopeErr - b.slopeErr || a.distErr - b.distErr);
+    const winner = scored[variant % scored.length]; // rotate through alternatives
     chosen = winner.u;
     chosenGain = winner.gain;
   } else {
-    // closest to target distance, prefer a loop on ties
+    // rank by closeness to target distance, prefer a loop on ties
     uniq.sort((a, b) => {
       const da = Math.abs(a.len - targetKm);
       const db = Math.abs(b.len - targetKm);
       if (Math.abs(da - db) > 0.2) return da - db;
       return (b.isLoop ? 1 : 0) - (a.isLoop ? 1 : 0);
     });
-    chosen = uniq[0];
+    chosen = uniq[variant % uniq.length]; // rotate through alternatives
     try {
       chosenGain = gainFromSeries(await lookupElevations(nodesToCoords(graph, sampleNodes(chosen.nodes, 30))));
     } catch {

@@ -81,6 +81,7 @@ export const api = {
     targetKm: number,
     slopeTarget?: number | null,
     returnToStart = true,
+    variant = 0,
     sessionId?: string | null,
   ) {
     return request<{ route: Route; targetKm: number }>('/routes/generate', {
@@ -91,6 +92,7 @@ export const api = {
         targetKm,
         slopeTarget: slopeTarget ?? null,
         returnToStart,
+        variant,
         sessionId: sessionId ?? null,
       }),
     });

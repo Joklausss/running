@@ -11,6 +11,7 @@ import {
 import AddressInput from '../../components/AddressInput';
 import RouteMap from './RouteMap';
 import RouteFiche from './RouteFiche';
+import RouteWatchExportModal from './RouteWatchExportModal';
 import { slopeLabel, routeShape } from './leafletSetup';
 
 export default function RoutesPage() {
@@ -35,6 +36,8 @@ export default function RoutesPage() {
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showFiche, setShowFiche] = useState(false);
+  const [showWatch, setShowWatch] = useState(false);
+  const variantRef = useRef(0); // bumped on "regenerate" to get a different route
   const autoGen = useRef(false);
 
   useEffect(() => {
@@ -70,8 +73,11 @@ export default function RoutesPage() {
     }
   }
 
-  async function generate() {
+  async function generate(regen = false) {
     if (!pos) return;
+    // a regenerate explores a new variant so the route is actually different
+    const v = regen ? variantRef.current + 1 : 0;
+    variantRef.current = v;
     setGenerating(true);
     setError(null);
     try {
@@ -81,6 +87,7 @@ export default function RoutesPage() {
         target,
         slope > 0 ? slope : null,
         returnToStart,
+        v,
       );
       setGenerated(route);
       setShowFiche(true);
@@ -148,9 +155,18 @@ export default function RoutesPage() {
                 routes={generated ? [generated] : []}
                 selectedId={generated?.id}
                 onSelect={() => setShowFiche(true)}
+                onMoveStart={(lat, lng) => {
+                  setPos([lat, lng]);
+                  setGenerated(null); // previous route is for the old start
+                  setShowFiche(false);
+                  variantRef.current = 0;
+                }}
                 className="h-64 w-full"
               />
             </div>
+            <p className="text-xs text-muted mt-1.5 text-center">
+              📍 Glisse le marqueur vert ou clique sur la carte pour déplacer ton point de départ.
+            </p>
           </div>
 
           <main className="mx-auto max-w-xl w-full px-5 py-4 space-y-4">
@@ -161,7 +177,7 @@ export default function RoutesPage() {
               </div>
               <input
                 type="range" min={0.5} max={30} step={0.5} value={target}
-                onChange={(e) => setTarget(Number(e.target.value))}
+                onChange={(e) => { setTarget(Number(e.target.value)); variantRef.current = 0; }}
                 className="w-full accent-primary mt-2"
               />
 
@@ -173,7 +189,7 @@ export default function RoutesPage() {
               </div>
               <input
                 type="range" min={0} max={10} step={1} value={slope}
-                onChange={(e) => setSlope(Number(e.target.value))}
+                onChange={(e) => { setSlope(Number(e.target.value)); variantRef.current = 0; }}
                 className="w-full accent-accent mt-2"
               />
               <div className="flex justify-between text-[10px] text-muted metric">
@@ -192,7 +208,7 @@ export default function RoutesPage() {
                   type="button"
                   role="switch"
                   aria-checked={returnToStart}
-                  onClick={() => setReturnToStart((v) => !v)}
+                  onClick={() => { setReturnToStart((v) => !v); variantRef.current = 0; }}
                   className={`relative w-12 h-7 rounded-full transition-colors shrink-0 ${
                     returnToStart ? 'bg-primary' : 'bg-surface-2'
                   }`}
@@ -206,14 +222,14 @@ export default function RoutesPage() {
               </div>
 
               <button
-                onClick={generate}
+                onClick={() => generate(!!generated)}
                 className="btn-primary w-full mt-3"
                 disabled={generating}
               >
                 {generating
                   ? 'Génération du parcours…'
                   : generated
-                    ? '↻ Régénérer un parcours'
+                    ? '↻ Régénérer (autre tracé)'
                     : '✨ Générer un parcours'}
               </button>
               {error && <p className="text-accent text-sm mt-2">{error}</p>}
@@ -237,8 +253,18 @@ export default function RoutesPage() {
                 <p className="text-xs text-primary mt-1">Détails, profil & GPX →</p>
               </button>
             )}
+
+            {generated && (
+              <button className="btn-ghost w-full" onClick={() => setShowWatch(true)}>
+                ⌚ Exporter iOS Watch
+              </button>
+            )}
           </main>
         </>
+      )}
+
+      {showWatch && generated && (
+        <RouteWatchExportModal route={generated} onClose={() => setShowWatch(false)} />
       )}
 
       {showFiche && generated && (
@@ -250,7 +276,7 @@ export default function RoutesPage() {
           onAssociated={() => navigate('/plan')}
           onRegenerate={() => {
             setShowFiche(false);
-            generate();
+            generate(true);
           }}
         />
       )}

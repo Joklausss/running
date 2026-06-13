@@ -103,6 +103,7 @@ routesRouter.post('/generate', async (req: AuthedRequest, res) => {
       targetKm: z.number().min(0.3).max(42),
       slopeTarget: z.number().int().min(1).max(10).nullable().optional(),
       returnToStart: z.boolean().optional(),
+      variant: z.number().int().min(0).max(50).optional(),
       sessionId: z.string().uuid().nullable().optional(),
     })
     .safeParse(req.body);
@@ -110,11 +111,11 @@ routesRouter.post('/generate', async (req: AuthedRequest, res) => {
     res.status(400).json({ error: 'lat, lng, targetKm required' });
     return;
   }
-  const { lat, lng, targetKm, slopeTarget, returnToStart, sessionId } = body.data;
+  const { lat, lng, targetKm, slopeTarget, returnToStart, variant, sessionId } = body.data;
 
   let generated;
   try {
-    generated = await generateRoute(lat, lng, targetKm, slopeTarget, returnToStart ?? true);
+    generated = await generateRoute(lat, lng, targetKm, slopeTarget, returnToStart ?? true, variant ?? 0);
   } catch (err) {
     res.status(502).json({ error: 'Génération impossible', detail: (err as Error).message });
     return;
