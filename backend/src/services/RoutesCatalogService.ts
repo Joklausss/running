@@ -175,13 +175,18 @@ export interface ParsedGpx {
 
 export function parseGpx(xml: string): ParsedGpx {
   const coordinates: [number, number][] = [];
-  // <trkpt lat=".." lon=".."> or <rtept ...>
-  const re = /<(?:trkpt|rtept)\b[^>]*?\blat="([-\d.]+)"[^>]*?\blon="([-\d.]+)"/gi;
+  // match any point element (trkpt / rtept / wpt), then read lat & lon in any
+  // order, single or double quotes, with other attributes in between.
+  const tagRe = /<(?:trkpt|rtept|wpt)\b([^>]*?)\/?>/gi;
   let m: RegExpExecArray | null;
-  while ((m = re.exec(xml))) {
-    const lat = Number(m[1]);
-    const lng = Number(m[2]);
-    if (Number.isFinite(lat) && Number.isFinite(lng)) coordinates.push([lng, lat]);
+  while ((m = tagRe.exec(xml))) {
+    const attrs = m[1];
+    const lat = attrs.match(/\blat\s*=\s*["']([-\d.]+)["']/i);
+    const lon = attrs.match(/\blon\s*=\s*["']([-\d.]+)["']/i);
+    if (!lat || !lon) continue;
+    const la = Number(lat[1]);
+    const lo = Number(lon[1]);
+    if (Number.isFinite(la) && Number.isFinite(lo)) coordinates.push([lo, la]);
   }
   const nameMatch = xml.match(/<name>\s*([^<]+?)\s*<\/name>/i);
   return {
