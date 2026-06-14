@@ -195,11 +195,16 @@ function edgeKey(a: number, b: number): string {
   return a < b ? `${a}-${b}` : `${b}-${a}`;
 }
 
-/** Dijkstra from src. `penalty` multiplies the cost of listed edges (for variety). */
+/**
+ * Dijkstra from src. `penalty` multiplies the cost of listed edges (soft, for
+ * variety); `blocked` edges are skipped entirely (hard — used to force a return
+ * leg that doesn't retrace the outbound, i.e. a real loop).
+ */
 function dijkstra(
   graph: Graph,
   src: number,
   penalty?: Set<string>,
+  blocked?: Set<string>,
 ): { dist: Map<number, number>; prev: Map<number, number> } {
   const dist = new Map<number, number>();
   const prev = new Map<number, number>();
@@ -213,8 +218,10 @@ function dijkstra(
     const node = graph.get(u);
     if (!node) continue;
     for (const e of node.adj) {
+      const key = blocked || penalty ? edgeKey(u, e.to) : '';
+      if (blocked && blocked.has(key)) continue; // hard skip
       let w = e.d;
-      if (penalty && penalty.has(edgeKey(u, e.to))) w *= 6;
+      if (penalty && penalty.has(key)) w *= 6;
       const nd = d + w;
       if (nd < (dist.get(e.to) ?? Infinity)) {
         dist.set(e.to, nd);
@@ -364,17 +371,40 @@ function makeLoop(
   start: number,
   prev: Map<number, number>,
   turn: number,
-): { nodes: number[]; len: number } | null {
+): { nodes: number[]; len: number; loopiness: number } | null {
   const out = pathNodes(prev, turn);
   if (out.length < 2) return null;
-  const penalty = new Set<string>();
-  for (let i = 1; i < out.length; i++) penalty.add(edgeKey(out[i - 1], out[i]));
-  const back = dijkstra(graph, turn, penalty);
+  const outEdges = new Set<string>();
+  for (let i = 1; i < out.length; i++) outEdges.add(edgeKey(out[i - 1], out[i]));
+
+  // Prefer a return that does NOT reuse the outbound at all → a real loop.
+  let back = dijkstra(graph, turn, undefined, outEdges);
+  if (back.dist.get(start) == null) {
+    // no fully-distinct return available → soft-penalised fallback
+    back = dijkstra(graph, turn, outEdges);
+  }
   if (back.dist.get(start) == null) return null;
   const ret = pathNodes(back.prev, start);
   if (ret.length < 2) return null;
+
   const nodes = out.concat(ret.slice(1));
-  return { nodes, len: realLengthKm(graph, nodes) };
+  return { nodes, len: realLengthKm(graph, nodes), loopiness: loopiness(nodes) };
+}
+
+/** 1.0 = every segment ridden once (true loop); ~0.5 = full out-and-back. */
+function loopiness(nodes: number[]): number {
+  const seen = new Set<string>();
+  let total = 0;
+  let distinct = 0;
+  for (let i = 1; i < nodes.length; i++) {
+    const k = edgeKey(nodes[i - 1], nodes[i]);
+    total++;
+    if (!seen.has(k)) {
+      seen.add(k);
+      distinct++;
+    }
+  }
+  return total ? distinct / total : 1;
 }
 
 function makeOutBack(
@@ -404,7 +434,7 @@ function buildRoute(
   targetKm: number,
   shape: Shape,
   seedBearing: number | null,
-): { nodes: number[]; len: number; isLoop: boolean } | null {
+): { nodes: number[]; len: number; isLoop: boolean; loopiness: number } | null {
   const reach = [...dist.values()].reduce((m, d) => Math.max(m, d), 0);
   if (reach < 0.03) return null;
   const mainKm = Math.min(targetKm, reach * 1.9);
@@ -450,7 +480,7 @@ function buildRoute(
   }
 
   if (nodes.length < 2) return null;
-  return { nodes, len: total, isLoop };
+  return { nodes, len: total, isLoop, loopiness: loopiness(nodes) };
 }
 
 /** Pick the next hop node ~hopLen from `current`, drifting away from start. */
@@ -492,7 +522,7 @@ function buildOpenRoute(
   prev0: Map<number, number>,
   targetKm: number,
   seedBearing: number | null,
-): { nodes: number[]; len: number; isLoop: boolean } | null {
+): { nodes: number[]; len: number; isLoop: boolean; loopiness: number } | null {
   const reach = [...dist0.values()].reduce((m, d) => Math.max(m, d), 0);
   if (reach < 0.03) return null;
 
@@ -512,7 +542,8 @@ function buildOpenRoute(
     }
     if (best != null) {
       const nodes = pathNodes(prev0, best);
-      if (nodes.length >= 2) return { nodes, len: realLengthKm(graph, nodes), isLoop: false };
+      if (nodes.length >= 2)
+        return { nodes, len: realLengthKm(graph, nodes), isLoop: false, loopiness: loopiness(nodes) };
     }
   }
 
@@ -540,7 +571,7 @@ function buildOpenRoute(
     pCur = dj.prev;
   }
   if (nodes.length < 2) return null;
-  return { nodes, len: total, isLoop: false };
+  return { nodes, len: total, isLoop: false, loopiness: loopiness(nodes) };
 }
 
 // ---------- elevation (open-meteo) for slope-target scoring ----------
@@ -628,7 +659,7 @@ export async function generateRoute(
   // explore different parts of the network → a genuinely different route.
   const off = (variant * 47) % 360;
 
-  type Built = { nodes: number[]; len: number; isLoop: boolean };
+  type Built = { nodes: number[]; len: number; isLoop: boolean; loopiness: number };
   let built: Built[];
   if (returnToStart) {
     const specs: { shape: Shape; bearing: number | null }[] = [
@@ -701,18 +732,21 @@ export async function generateRoute(
         distErr: Math.abs(u.len - targetKm) / targetKm,
         slopeErr: Math.abs(slopeScore(gains[i], u.len) - slopeTarget!),
       }))
-      .sort((a, b) => a.slopeErr - b.slopeErr || a.distErr - b.distErr);
+      // slope match first (user asked for it), then prefer loops, then distance
+      .sort(
+        (a, b) =>
+          a.slopeErr - b.slopeErr ||
+          b.u.loopiness - a.u.loopiness ||
+          a.distErr - b.distErr,
+      );
     const winner = scored[variant % scored.length]; // rotate through alternatives
     chosen = winner.u;
     chosenGain = winner.gain;
   } else {
-    // rank by closeness to target distance, prefer a loop on ties
-    uniq.sort((a, b) => {
-      const da = Math.abs(a.len - targetKm);
-      const db = Math.abs(b.len - targetKm);
-      if (Math.abs(da - db) > 0.2) return da - db;
-      return (b.isLoop ? 1 : 0) - (a.isLoop ? 1 : 0);
-    });
+    // Strongly favour loops (more pleasant) over out-and-backs, while staying
+    // close to the target distance.
+    const score = (b: Built) => b.loopiness * 2 - (Math.abs(b.len - targetKm) / targetKm) * 1.5;
+    uniq.sort((a, b) => score(b) - score(a));
     chosen = uniq[variant % uniq.length]; // rotate through alternatives
     try {
       chosenGain = gainFromSeries(await lookupElevations(nodesToCoords(graph, sampleNodes(chosen.nodes, 30))));
@@ -724,7 +758,8 @@ export async function generateRoute(
   return {
     coordinates: pathCoords(graph, chosen.nodes),
     distanceKm: Math.round(chosen.len * 100) / 100,
-    isLoop: chosen.isLoop,
+    // a high-loopiness route that returns to start is a real loop
+    isLoop: chosen.isLoop || (returnToStart && chosen.loopiness > 0.8),
     elevationGain: chosenGain,
   };
 }
