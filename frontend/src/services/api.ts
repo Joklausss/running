@@ -102,6 +102,23 @@ export const api = {
   getRoute(id: string) {
     return request<{ route: Route; elevation: ElevationPoint[] }>(`/routes/${id}`);
   },
+  getCuratedRoutes(lat: number, lng: number, radius: number, discipline: string) {
+    return request<{ routes: Route[] }>(
+      `/routes/curated?lat=${lat}&lng=${lng}&radius=${radius}&discipline=${discipline}`,
+    );
+  },
+  getMyRoutes() {
+    return request<{ routes: Route[] }>('/routes/mine');
+  },
+  importGpx(gpx: string, discipline?: string, name?: string) {
+    return request<{ route: Route }>('/routes/import', {
+      method: 'POST',
+      body: JSON.stringify({ gpx, discipline, name }),
+    });
+  },
+  deleteMyRoute(id: string) {
+    return request<{ ok: boolean }>(`/routes/mine/${id}`, { method: 'DELETE' });
+  },
   associateRoute(sessionId: string, routeId: string) {
     return request<{ ok: boolean }>(`/routes/session/${sessionId}`, {
       method: 'PUT',

@@ -12,7 +12,16 @@ import AddressInput from '../../components/AddressInput';
 import RouteMap from './RouteMap';
 import RouteFiche from './RouteFiche';
 import RouteWatchExportModal from './RouteWatchExportModal';
+import CuratedRoutesView from './CuratedRoutesView';
+import MyRoutesView from './MyRoutesView';
 import { slopeLabel, routeShape } from './leafletSetup';
+
+type Tab = 'generate' | 'curated' | 'mine';
+const TABS: { id: Tab; label: string }[] = [
+  { id: 'generate', label: '✨ Générer' },
+  { id: 'curated', label: '📍 Balisés' },
+  { id: 'mine', label: '⤒ Mes tracés' },
+];
 
 type Discipline = 'running' | 'mtb' | 'road';
 const DISCIPLINES: { id: Discipline; icon: string; label: string; max: number; def: number }[] = [
@@ -36,6 +45,7 @@ export default function RoutesPage() {
   );
   const [geoTried, setGeoTried] = useState(false);
 
+  const [tab, setTab] = useState<Tab>('generate');
   const [discipline, setDiscipline] = useState<Discipline>('running');
   const [target, setTarget] = useState<number>(tkm ? Math.round(Number(tkm) * 10) / 10 : 5);
   const [slope, setSlope] = useState<number>(0); // 0 = auto (no preference), 1..10
@@ -125,14 +135,14 @@ export default function RoutesPage() {
           <Link to={associateTo ? '/plan' : '/dashboard'} className="text-muted text-sm hover:text-text">
             ← {associateTo ? 'Programme' : 'Dashboard'}
           </Link>
-          <h1 className="text-2xl mt-1">Générer un parcours</h1>
+          <h1 className="text-2xl mt-1">Itinéraires</h1>
           {associateTo ? (
             <div className="mt-2 rounded-xl bg-primary/10 border border-primary/30 px-4 py-2 text-sm">
               🎯 Parcours de ~{target.toFixed(1)} km pour <strong>{associateLabel}</strong>.
             </div>
           ) : (
             <p className="text-sm text-muted mt-1">
-              On relie les chemins autour de toi en une boucle de la distance voulue.
+              Génère un parcours sur-mesure, explore les itinéraires balisés, ou importe tes tracés.
             </p>
           )}
         </div>
@@ -157,7 +167,60 @@ export default function RoutesPage() {
         </div>
       ) : (
         <>
+          {/* Shared: discipline selector + tabs */}
           <div className="mx-auto max-w-xl w-full px-5">
+            <div className="grid grid-cols-3 gap-2">
+              {DISCIPLINES.map((d) => (
+                <button
+                  key={d.id}
+                  type="button"
+                  onClick={() => {
+                    setDiscipline(d.id);
+                    setTarget(d.def);
+                    setGenerated(null);
+                    setShowFiche(false);
+                    variantRef.current = 0;
+                  }}
+                  className={`rounded-xl py-2 text-sm font-medium transition-all ${
+                    discipline === d.id ? 'bg-primary text-black' : 'bg-surface-2 text-muted'
+                  }`}
+                >
+                  {d.icon} {d.label}
+                </button>
+              ))}
+            </div>
+            <div className="grid grid-cols-3 gap-2 mt-2">
+              {TABS.map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => setTab(t.id)}
+                  className={`rounded-xl py-2 text-sm font-medium transition-all border ${
+                    tab === t.id
+                      ? 'border-primary/60 text-text'
+                      : 'border-transparent bg-surface-2 text-muted'
+                  }`}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {tab === 'curated' && (
+            <main className="mx-auto max-w-xl w-full px-5 py-4">
+              <CuratedRoutesView pos={pos} discipline={discipline} />
+            </main>
+          )}
+          {tab === 'mine' && (
+            <main className="mx-auto max-w-xl w-full px-5 py-4">
+              <MyRoutesView pos={pos} discipline={discipline} />
+            </main>
+          )}
+
+          {tab === 'generate' && (
+          <>
+          <div className="mx-auto max-w-xl w-full px-5 mt-4">
             <div className="rounded-2xl overflow-hidden border border-white/5">
               <RouteMap
                 userPos={pos}
@@ -180,29 +243,6 @@ export default function RoutesPage() {
 
           <main className="mx-auto max-w-xl w-full px-5 py-4 space-y-4">
             <div className="card p-4">
-              {/* Discipline */}
-              <span className="text-sm text-muted">Discipline</span>
-              <div className="grid grid-cols-3 gap-2 mt-2 mb-4">
-                {DISCIPLINES.map((d) => (
-                  <button
-                    key={d.id}
-                    type="button"
-                    onClick={() => {
-                      setDiscipline(d.id);
-                      setTarget(d.def);
-                      setGenerated(null);
-                      setShowFiche(false);
-                      variantRef.current = 0;
-                    }}
-                    className={`rounded-xl py-2 text-sm font-medium transition-all ${
-                      discipline === d.id ? 'bg-primary text-black' : 'bg-surface-2 text-muted'
-                    }`}
-                  >
-                    {d.icon} {d.label}
-                  </button>
-                ))}
-              </div>
-
               <div className="flex justify-between text-sm">
                 <span className="text-muted">Distance cible</span>
                 <span className="metric text-primary text-lg font-bold">{target.toFixed(1)} km</span>
@@ -296,6 +336,8 @@ export default function RoutesPage() {
               </button>
             )}
           </main>
+          </>
+          )}
         </>
       )}
 

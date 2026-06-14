@@ -90,6 +90,7 @@ export interface Route {
   center_lng: number;
   geojson: GeoJSONLineString;
   source: string;
+  discipline?: string | null;
 }
 
 export interface ElevationPoint {

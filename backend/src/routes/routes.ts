@@ -8,6 +8,11 @@ import {
   type RouteCandidate,
 } from '../services/RoutesService.js';
 import { generateRoute } from '../services/RouteBuilderService.js';
+import {
+  discoverCuratedRoutes,
+  parseGpx,
+  type CatalogRoute,
+} from '../services/RoutesCatalogService.js';
 
 export const routesRouter = Router();
 routesRouter.use(requireAuth);
@@ -46,7 +51,36 @@ async function persistRoutes(routes: RouteCandidate[]): Promise<string[]> {
 }
 
 const ROUTE_COLS = `id, name, distance_km::float8 AS distance_km, elevation_gain,
-  terrain_type, is_loop, center_lat, center_lng, geojson, source`;
+  terrain_type, is_loop, center_lat, center_lng, geojson, source, discipline`;
+
+// in-memory cache for curated (OSM relation) discovery — Overpass-friendly
+const curatedCache = new Map<string, { ids: string[]; ts: number }>();
+
+async function persistCatalogRoutes(
+  routes: CatalogRoute[],
+  discipline: string,
+): Promise<string[]> {
+  const ids: string[] = [];
+  for (const r of routes) {
+    const { rows } = await query<{ id: string }>(
+      `INSERT INTO routes (name, distance_km, elevation_gain, terrain_type, is_loop,
+                           geojson, source, center_lat, center_lng, discipline)
+       VALUES ($1,$2,0,$3,$4,$5,'osm',$6,$7,$8) RETURNING id`,
+      [
+        r.name,
+        r.distanceKm,
+        r.terrainType,
+        r.isLoop,
+        JSON.stringify({ type: 'LineString', coordinates: r.coordinates }),
+        r.centerLat,
+        r.centerLng,
+        discipline,
+      ],
+    );
+    ids.push(rows[0].id);
+  }
+  return ids;
+}
 
 // GET /api/routes?lat=&lng=&radius=  — discover routes near a point
 routesRouter.get('/', async (req: AuthedRequest, res) => {
@@ -177,6 +211,112 @@ routesRouter.post('/generate', async (req: AuthedRequest, res) => {
 
   const out = await query(`SELECT ${ROUTE_COLS} FROM routes WHERE id = $1`, [routeId]);
   res.status(201).json({ route: out.rows[0], targetKm });
+});
+
+// GET /api/routes/curated — real signposted routes (OSM relations) near a point
+routesRouter.get('/curated', async (req: AuthedRequest, res) => {
+  const q = z
+    .object({
+      lat: z.coerce.number().min(-90).max(90),
+      lng: z.coerce.number().min(-180).max(180),
+      radius: z.coerce.number().min(1).max(40).default(15),
+      discipline: z.enum(['running', 'trail', 'road', 'mtb', 'gravel']).default('running'),
+    })
+    .safeParse(req.query);
+  if (!q.success) {
+    res.status(400).json({ error: 'lat & lng required' });
+    return;
+  }
+  const { lat, lng, radius, discipline } = q.data;
+  const key = `${discipline}|${lat.toFixed(2)},${lng.toFixed(2)},${radius}`;
+  const cached = curatedCache.get(key);
+
+  let ids: string[];
+  if (cached && Date.now() - cached.ts < 24 * 60 * 60 * 1000) {
+    ids = cached.ids;
+  } else {
+    let found;
+    try {
+      found = await discoverCuratedRoutes(lat, lng, radius * 1000, discipline);
+    } catch (err) {
+      res.status(502).json({ error: 'Overpass indisponible', detail: (err as Error).message });
+      return;
+    }
+    ids = await persistCatalogRoutes(found, discipline);
+    curatedCache.set(key, { ids, ts: Date.now() });
+  }
+  if (!ids.length) {
+    res.json({ routes: [] });
+    return;
+  }
+  const { rows } = await query(
+    `SELECT ${ROUTE_COLS} FROM routes WHERE id = ANY($1::uuid[]) ORDER BY distance_km`,
+    [ids],
+  );
+  res.json({ routes: rows });
+});
+
+// GET /api/routes/mine — the user's personal (imported / saved) routes
+routesRouter.get('/mine', async (req: AuthedRequest, res) => {
+  const { rows } = await query(
+    `SELECT ${ROUTE_COLS} FROM routes WHERE user_id = $1 ORDER BY created_at DESC`,
+    [req.userId],
+  );
+  res.json({ routes: rows });
+});
+
+// POST /api/routes/import — import a personal route from a GPX file
+routesRouter.post('/import', async (req: AuthedRequest, res) => {
+  const body = z
+    .object({
+      gpx: z.string().min(20).max(5_000_000),
+      name: z.string().max(120).optional(),
+      discipline: z.enum(['running', 'trail', 'road', 'mtb', 'gravel']).optional(),
+    })
+    .safeParse(req.body);
+  if (!body.success) {
+    res.status(400).json({ error: 'gpx (string) required' });
+    return;
+  }
+  const parsed = parseGpx(body.data.gpx);
+  if (parsed.coordinates.length < 2) {
+    res.status(422).json({ error: 'GPX sans points exploitables (trkpt/rtept).' });
+    return;
+  }
+  const lats = parsed.coordinates.map((c) => c[1]);
+  const lngs = parsed.coordinates.map((c) => c[0]);
+  const first = parsed.coordinates[0];
+  const last = parsed.coordinates[parsed.coordinates.length - 1];
+  const isLoop =
+    Math.hypot((last[1] - first[1]) * 111, (last[0] - first[0]) * 111) < 0.1;
+
+  const { rows } = await query<{ id: string }>(
+    `INSERT INTO routes (name, distance_km, elevation_gain, terrain_type, is_loop,
+                         geojson, source, center_lat, center_lng, discipline, user_id)
+     VALUES ($1,$2,0,$3,$4,$5,'user',$6,$7,$8,$9) RETURNING id`,
+    [
+      body.data.name || parsed.name || 'Mon itinéraire',
+      parsed.distanceKm,
+      'mixed',
+      isLoop,
+      JSON.stringify({ type: 'LineString', coordinates: parsed.coordinates }),
+      (Math.min(...lats) + Math.max(...lats)) / 2,
+      (Math.min(...lngs) + Math.max(...lngs)) / 2,
+      body.data.discipline ?? null,
+      req.userId,
+    ],
+  );
+  const out = await query(`SELECT ${ROUTE_COLS} FROM routes WHERE id = $1`, [rows[0].id]);
+  res.status(201).json({ route: out.rows[0] });
+});
+
+// DELETE /api/routes/mine/:id — remove a personal route
+routesRouter.delete('/mine/:id', async (req: AuthedRequest, res) => {
+  const r = await query('DELETE FROM routes WHERE id = $1 AND user_id = $2', [
+    req.params.id,
+    req.userId,
+  ]);
+  res.json({ ok: true, deleted: r.rowCount ?? 0 });
 });
 
 // GET /api/routes/:id — full route + on-demand elevation profile
