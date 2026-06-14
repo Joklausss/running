@@ -100,7 +100,7 @@ routesRouter.post('/generate', async (req: AuthedRequest, res) => {
     .object({
       lat: z.number().min(-90).max(90),
       lng: z.number().min(-180).max(180),
-      targetKm: z.number().min(0.3).max(42),
+      targetKm: z.number().min(0.3).max(200),
       slopeTarget: z.number().int().min(1).max(10).nullable().optional(),
       returnToStart: z.boolean().optional(),
       variant: z.number().int().min(0).max(50).optional(),

@@ -610,14 +610,15 @@ export async function generateRoute(
   variant = 0,
   discipline: Discipline = 'running',
 ): Promise<GeneratedRoute> {
-  // A loop only needs to span ~half the target (turnaround); a point-to-point
-  // route needs to span ~the whole target (the endpoint is that far away).
-  // Cycling routes are longer, so allow a larger network radius.
-  const loopCap = discipline === 'running' ? 4.5 : 9;
-  const openCap = discipline === 'running' ? 8 : 16;
+  // Search radius scales with the target: a loop needs ~target/2 + 50% margin
+  // (= target × 0.75) around the start; a point-to-point needs ~the whole target
+  // (the endpoint is that far away). Capped at what Overpass can fetch in one
+  // request; beyond the cap, the distance is reached by combining legs.
+  const loopCap = discipline === 'running' ? 12 : 22;
+  const openCap = discipline === 'running' ? 18 : 30;
   const radiusKm = returnToStart
-    ? Math.min(loopCap, Math.max(1.5, targetKm * 0.5))
-    : Math.min(openCap, Math.max(1.5, targetKm * 0.95));
+    ? Math.min(loopCap, Math.max(1.5, targetKm * 0.75))
+    : Math.min(openCap, Math.max(1.5, targetKm * 1.0));
   const graph = await fetchGraph(lat, lng, Math.round(radiusKm * 1000), discipline);
   const start = chooseStart(graph, lat, lng);
   if (start == null) throw new Error('Aucun chemin trouvé à proximité');

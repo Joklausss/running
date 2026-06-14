@@ -9,6 +9,7 @@
     "backend"
   ],
   "scripts": {
+    "dev": "concurrently -k -n back,front -c green,cyan \"npm:dev:backend\" \"npm:dev:frontend\"",
     "dev:frontend": "npm run dev --workspace frontend",
     "dev:backend": "npm run dev --workspace backend",
     "build": "npm run build --workspace backend && npm run build --workspace frontend",
@@ -23,6 +24,7 @@
   "devDependencies": {
     "@eslint/js": "^9.39.4",
     "@playwright/test": "^1.60.0",
+    "concurrently": "^9.2.1",
     "eslint": "^9.39.4",
     "eslint-plugin-react-hooks": "^5.2.0",
     "globals": "^15.15.0",
